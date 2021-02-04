@@ -18,6 +18,7 @@ The only thing user need to do is to `create token` at master node & give it to 
 ---------------------------------------------------------------------------------------------------------------------------------
  
  ### If you want to increase your no. of slave then copy the code of slave as many no. of time as you want
+ #### note: For now this script has capability to work on centos(7,8),rhel(7,8) & fedora  
  
  
  
