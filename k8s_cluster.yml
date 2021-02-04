@@ -1,0 +1,172 @@
+- hosts: localhost
+  vars_files:
+  - var.yml
+  tasks:
+
+  - name: "Installing boto3"
+    pip:
+       name: boto3
+
+  - name: "Launching Kubemaster"
+    ec2_instance:
+       availability_zone: "{{ zone }}" 
+       aws_access_key: "{{ access_key }}"
+       aws_secret_key: "{{ secret key }}"
+       image_id: ami-08e0ca9924195beba
+       instance_type: t2.micro
+       name: kubemaster
+       network:
+         assign_public_ip: true
+       region: "{{ region }}"
+       security_group: "{{ sg }} "
+       state: present
+       wait: yes
+       key_name: "{{ key_name }}"
+
+  - name: "Launching Kubeslave"
+    ec2_instance:
+       availability_zone: "{{ zone }}" 
+       aws_access_key: "{{ access_key }}"
+       aws_secret_key: "{{ secret key }}"
+       image_id: ami-08e0ca9924195beba
+       instance_type: t2.micro
+       name: kubeslave
+       network:
+        assign_public_ip: true
+       region: "{{ region }}"
+       state: present
+       security_group: "{{ sg }} "
+       wait: yes
+       key_name: "{{ key_name }}"
+
+  - name: "Re-freshing inventory"
+    meta: refresh_inventory
+   
+- hosts: tag_Name_kubemaster
+  tasks:
+  - name: install docker
+    package: 
+      name: docker
+      state: present
+
+  - name: start docker serveice
+    service: 
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: configuring repo for kudeadm
+    copy:
+      src: kube.repo
+      dest: /etc/yum.repos.d/kube.repo
+
+  - name: installing kubeadm,kubectl & kublet
+    command: yum install -y kubeadm kublet kubectl --disableexcludes=kubernetes
+
+
+  - name: start kublet serveice
+    service: 
+      name: kubelet
+      state: started
+      enabled: yes
+    ignore_errors: yes
+
+  - name: pulling required images for k8s master 
+    command: kubeadm config images pull
+
+  - name: installing iproute-tc for k8s
+    package:
+      name: iproute-tc
+      state: present 
+  
+  - name: changing driver of docker
+    copy:
+      src: docker_driver
+      dest: /etc/docker/daemon.json
+
+  - name: start docker serveice
+    service: 
+      name: docker
+      state: restarted
+      enabled: yes
+
+  - name: configuring n/w of k8s
+    copy:
+      src: k8s.conf
+      dest: /etc/sysctl.d/k8s.conf
+
+  - name: restarting
+    command: sysctl --system
+
+  - name: init k8s master
+    command: kubeadm init --pod-network-cidr=10.240.0.0/16 --ignore-preflight-errors=NumCPU --ignore-preflight-errors=Mem
+
+  - name: configuring k8s master as its client(creating directory)
+    file: 
+      path: /root/.kube
+      state: directory
+      group: root
+      owner: root
+
+  - name: configuring k8s master as its client(copying file)
+    command: cp -i /etc/kubernetes/admin.conf  /root/.kube/config
+
+  - name: creating flannel container for implementing overlay concept
+    command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+
+- hosts: tag_Name_kubeslave
+  tasks:
+  - name: install docker & iproute-tc
+    package: 
+      name: "{{ item }}"
+      state: present
+    loop:
+      - docker
+      - iproute-tc
+
+  - name: start docker serveice
+    service: 
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: configuring repo for kudeadm
+    copy:
+      src: kube.repo
+      dest: /etc/yum.repos.d/kube.repo
+
+  - name: installing kubeadm & kublet
+    command: yum install -y kubeadm kublet --disableexcludes=kubernetes
+
+
+  - name: start kublet serveice
+    service: 
+      name: kubelet
+      state: started
+      enabled: yes
+    ignore_errors: yes
+
+  - name: changing driver of docker
+    copy:
+      src: docker_driver
+      dest: /etc/docker/daemon.json
+
+  - name: start docker serveice
+    service: 
+      name: docker
+      state: restarted
+      enabled: yes
+
+  - name: configuring n/w of k8s
+    copy:
+      src: k8s.conf
+      dest: /etc/sysctl.d/k8s.conf
+
+  - name: restarting
+    command: sysctl --system
+
+
+
+
+

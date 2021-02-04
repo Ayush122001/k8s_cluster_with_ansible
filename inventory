@@ -1,0 +1,4 @@
+[kubeslave]
+65.1.110.104  ansible_ssh_user=ec2-use
+[kubemaster]
+15.207.254.53  ansible_ssh_user=ec2-user
